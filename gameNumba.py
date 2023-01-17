@@ -48,6 +48,7 @@ def DecodeIDmove(IDmove):
 StartingBoard  = np.zeros(144,dtype=np.uint8)
 
 @jit(nopython=True)   # pour x,y donné => retourne indice dans le tableau B
+# I play ? 
 def iPxy(x,y):
     return 64 + 8 * y + x
 
@@ -92,10 +93,12 @@ _PossibleMoves(0,StartingBoard)   # prépare le gameboard de démarrage
 # def CopyGame(B)       => return B.copy()
 
 @jit(nopython=True)
+#end of the game
 def Terminated(B):
     return B[-1] == 0
 
 @jit(nopython=True)
+
 def GetScore(B):
     if B[-2] == 10 : return  1
     if B[-2] == 20 : return -1
@@ -170,10 +173,10 @@ def PlayoutDebug(B,verbose=False):
 #
 #  Version Debug Demo pour affichage et test
 
-B = StartingBoard.copy()
-PlayoutDebug(B,True)
-print("Score : ",GetScore(B))
-print("")
+#B = StartingBoard.copy()
+#PlayoutDebug(B,True)
+#print("Score : ",GetScore(B))
+#print("")
 
 
 ################################################################
@@ -218,15 +221,62 @@ dt = T1-T0
 print("Nb Sims / second:", int(nbSimus / dt ))
 
 
+################################################################
+#   IA rand 
+#   Nous allons mettre en place l’IA de jeu la plus simple possible. En effet, cette IA va récupérer la liste des coups possibles et en choisir 1 au hasard.
+
+@jit(nopython=True)
+def IaRand(B):
+    while B[-1] != 0:                   # tant qu'il reste des coups possibles
+        id = random.randint(0,B[-1]-1)  # select random move
+        idMove = B[id]
+    return idMove
 
 
+@jit(nopython=True)
+def IA100P(B):
+    #boucle sur les coups possibles
+    test_min_score=-1
+    for each in range(B[-1]):
+        print("B[-1]")
+        print(B[-1])
+        #nouvelle array des résultats de chaque simulation
+        results_array=np.zeros(100)
+        #boucle sur les 100 simulations
+        for i in range(100):
+            B_sim = B.copy()
+            Play(B_sim,B[each])
+            results_array[i] = GetScore(B_sim)
+        #moyenne les 100 parties à venir et sauvegarde pour comparaison
+        mean_score=results_array.mean()
+        #meilleur moyenne
+        if mean_score > test_min_score:
+            test_min_score = mean_score
+            idBestMove= B[each]
+    #joue le coup correspondant
+    #Play(B,idBestMove)
+    return idBestMove
 
+def playout_ia_vs_ia(B,verbose=False):
+    Print(B)
+    while not Terminated(B):
+        #si c'est le joueur 0
+        if B[-2] == 0:
+            #choix de l'ia
+            idMove=IA100P(B)
+            print("idmove:")
+            print(idMove)
+        #si c'est le joueur 1
+        else :
+            idMove=IaRand(B)
 
+        player,x,y = DecodeIDmove(idMove)
+        print("Playing : ",idMove, " -  Player: ",player, "  X:",x," Y:",y)
+        Play(B,idMove)
+        Print(B)
+        print("---------------cs-----------------------")
 
-
-
-
-
-
-
-
+B = StartingBoard.copy()
+playout_ia_vs_ia(B,True)
+print("Score : ",GetScore(B))
+print("")
