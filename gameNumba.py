@@ -260,46 +260,54 @@ def IA100P(B):
 
 @jit(nopython=True)
 def IA1KP(B):
-    #boucle sur les coups possibles
-    test_min_score=-1
-    for each in range(B[-1]):
-        #nouvelle array des résultats de chaque simulation
-        results_array=np.zeros(1000)
-        #boucle sur les 100 simulations
-        for i in range(1000):
-            B_sim = B.copy()
-            Play(B_sim,B[each])
-            results_array[i] = GetScore(B_sim)
-        #moyenne les 100 parties à venir et sauvegarde pour comparaison
-        mean_score=results_array.mean()
-        #meilleur moyenne
-        if mean_score > test_min_score:
-            test_min_score = mean_score
-            idBestMove= B[each]
-    #joue le coup correspondant
-    #Play(B,idBestMove)
+    if B[-1] <= 3:
+        #boucle sur les coups possibles
+        test_min_score=-1
+        for each in range(B[-1]):
+            #nouvelle array des résultats de chaque simulation
+            results_array=np.zeros(1000)
+            #boucle sur les 100 simulations
+            for i in range(1000):
+                B_sim = B.copy()
+                Play(B_sim,B[each])
+                playout_ia_vs_ia(B_sim,IA100P,IaRand)
+                results_array[i] = GetScore(B_sim)
+            #moyenne les 100 parties à venir et sauvegarde pour comparaison
+            mean_score=results_array.mean()
+            #meilleur moyenne
+            if mean_score > test_min_score:
+                test_min_score = mean_score
+                idBestMove= B[each]
+        #joue le coup correspondant
+        #Play(B,idBestMove)
+    else:
+        idBestMove= B[random.randint(0,B[-1]-1)]
     return idBestMove
 
 @jit(nopython=True,parallel=True)
 def IA10KP(B):
-    #boucle sur les coups possibles
-    test_min_score=-1
-    for each in range(B[-1]):
-        #nouvelle array des résultats de chaque simulation
-        results_array=np.zeros(10000)
-        #boucle sur les 100 simulations
-        for i in range(10000):
-            B_sim = B.copy()
-            Play(B_sim,B[each])
-            results_array[i] = GetScore(B_sim)
-        #moyenne les 100 parties à venir et sauvegarde pour comparaison
-        mean_score=results_array.mean()
-        #meilleur moyenne
-        if mean_score > test_min_score:
-            test_min_score = mean_score
-            idBestMove= B[each]
-    #joue le coup correspondant
-    #Play(B,idBestMove)
+    if B[-1] <= 3:
+        #boucle sur les coups possibles
+        test_min_score=-1
+        for each in range(B[-1]):
+            #nouvelle array des résultats de chaque simulation
+            results_array=np.zeros(10000)
+            #boucle sur les 100 simulations
+            for i in range(10000):
+                B_sim = B.copy()
+                Play(B_sim,B[each])
+                playout_ia_vs_ia(B_sim,IA100P,IaRand)
+                results_array[i] = GetScore(B_sim)
+            #moyenne les 100 parties à venir et sauvegarde pour comparaison
+            mean_score=results_array.mean()
+            #meilleur moyenne
+            if mean_score > test_min_score:
+                test_min_score = mean_score
+                idBestMove= B[each]
+        #joue le coup correspondant
+        #Play(B,idBestMove)
+    else:
+        idBestMove= B[random.randint(0,B[-1]-1)]
     return idBestMove
 
 @jit(nopython=True)
