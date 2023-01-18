@@ -235,26 +235,30 @@ def IaRand(B):
 @jit(nopython=True)
 def IA100P(B):
     #boucle sur les coups possibles
-    test_min_score=-1
-    for each in range(B[-1]):
-        #nouvelle array des résultats de chaque simulation
-        results_array=np.zeros(100)
-        #boucle sur les 100 simulations
-        for i in range(100):
-            B_sim = B.copy()
-            Play(B_sim,B[each])
-            results_array[i] = GetScore(B_sim)
-        #moyenne les 100 parties à venir et sauvegarde pour comparaison
-        mean_score=results_array.mean()
-        #meilleur moyenne
-        if mean_score > test_min_score:
-            test_min_score = mean_score
-            idBestMove= B[each]
-    #joue le coup correspondant
-    #Play(B,idBestMove)
+    if B[-1] <= 3:
+        test_min_score=-1
+        for each in range(B[-1]):
+            #nouvelle array des résultats de chaque simulation
+            results_array=np.zeros(100)
+            #boucle sur les 100 simulations
+            for i in range(100):
+                B_sim = B.copy()
+                Play(B_sim,B[each])
+                playout_ia_vs_ia(B_sim,IA100P,IaRand)
+                results_array[i] = GetScore(B_sim)
+            #moyenne les 100 parties à venir et sauvegarde pour comparaison
+            mean_score=results_array.mean()
+            #meilleur moyenne
+            if mean_score > test_min_score:
+                test_min_score = mean_score
+                idBestMove= B[each]
+        #joue le coup correspondant
+        #Play(B,idBestMove)
+    else:
+        idBestMove= B[random.randint(0,B[-1]-1)]
     return idBestMove
 
-@jit(nopython=True,parallel=True)
+@jit(nopython=True)
 def IA1KP(B):
     #boucle sur les coups possibles
     test_min_score=-1
@@ -322,15 +326,15 @@ def launch_n_games(n,player_0,player_1):
     scores = np.zeros(n)
     for i in range(n):
         #if i % 50 ==0:
-        #print("game n°",i)
+        print("game n°",i)
         B = StartingBoard.copy()
         playout_ia_vs_ia(B,player_0,player_1)
         scores[i] = GetScore(B)
-    player_0_purcentage = np.count_nonzero(scores == 1)/n
-    player_1_purcentage = np.count_nonzero(scores == -1)/n
+    player_0_purcentage = np.count_nonzero(scores == 1)/n*100
+    player_1_purcentage = np.count_nonzero(scores == -1)/n*100
     print("player 0 won",player_0_purcentage,"% of the",n,"games")
     print("player 1 won",player_1_purcentage,"% of the",n,"games")
 
     print("Mean score: ",np.mean(scores))
 
-launch_n_games(1000,IA100P,IA1KP)
+launch_n_games(100,IA100P,IaRand)
