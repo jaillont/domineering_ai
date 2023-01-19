@@ -228,7 +228,7 @@ def ParrallelPlayout(nb):
 
 
 @jit(nopython=True)
-def IARand(B, player_0):
+def IARand(B, player_0=False):
     id = random.randint(0, B[-1]-1)
     idMove = B[id]
     
@@ -323,21 +323,67 @@ def IA1KP(B, player_0):
     return idBestMove
 
 
-@jit(nopython=True)
-def IA10KP(B):
+# @jit(nopython=True, parallel=True)
+# def IA10KP(B, player_0):
 
-    best_mean_score = -2
+#     if player_0:
+#         best_mean_score = -2
+#     else:
+#         best_mean_score = 2
 
-    # Simuler tous les coups possibles
-    for move in range(B[-1]):
+#     # Simuler tous les coups possibles
+#     for move in numba.prange(B[-1]):
+
+#         nb_sim = 10000
+
+#         # Initialiser la grille de score à chaque simulation d'un nouveau coup
+#         scores_sim = np.empty(nb_sim)
+    
+#         # Simuler nb_sim fois chaque coup
+#         for i in range(nb_sim):
+
+#             # Créer une copie de la grille en cours
+#             B_sim = B.copy()
+            
+#             # Jouer le coup que l'on veut simuler
+#             Play(B_sim, B_sim[move])
+
+#             # Simuler la fin de la partie
+#             while not Terminated(B_sim):
+#                 if B[-3] == 0:
+#                     sim_move = IARand(B_sim)
+#                 else:
+#                     sim_move = IARand(B_sim)
+#                 Play(B_sim, sim_move)
+            
+#             score_sim = GetScore(B_sim)
+#             scores_sim[i] = score_sim
+
+#         # Calculer le score moyen obtenu pour le coup simulé
+#         mean_score = scores_sim.sum()/nb_sim
+
+#         if mean_score > best_mean_score:
+#             best_mean_score = mean_score
+#             idBestMove = B_sim[move]
+
+#     return idBestMove
+
+from numba import njit
+
+@njit(nopython=True, parallel=True)
+def IA10KP(B, player_0):
+
+    if player_0:
+        best_mean_score = -2
+    else:
+        best_mean_score = 2
+
+    for move in numba.prange(B[-1]):
 
         nb_sim = 10000
+        scores_sim = np.zeros(nb_sim)
 
-        # Initialiser la grille de score à chaque simulation d'un nouveau coup
-        scores_sim = np.empty(nb_sim)
-    
-        # Simuler nb_sim fois chaque coup
-        for i in range(nb_sim):
+        for i in numba.prange(nb_sim):
 
             # Créer une copie de la grille en cours
             B_sim = B.copy()
@@ -345,16 +391,20 @@ def IA10KP(B):
             # Jouer le coup que l'on veut simuler
             Play(B_sim, B_sim[move])
 
-            # Simuler la fin de la partie
             score_sim = playout_IA_vs_IA(B_sim, IARand, IARand)
             scores_sim[i] = score_sim
-
+        
         # Calculer le score moyen obtenu pour le coup simulé
         mean_score = scores_sim.sum()/nb_sim
 
-        if mean_score > best_mean_score:
-            best_mean_score = mean_score
-            idBestMove = B_sim[move]
+        if player_0:
+            if mean_score > best_mean_score:
+                best_mean_score = mean_score
+                idBestMove = B[move]
+        else:
+            if mean_score < best_mean_score:
+                best_mean_score = mean_score
+                idBestMove = B[move]
 
     return idBestMove
 
@@ -371,7 +421,7 @@ def playout_IA_vs_IA(B, ia_0, ia_1):
             idMove = ia_0(B, player_0=True) 
 
         # Si c'est au tour du joueur 1
-        if B[-3] == 1:
+        elif B[-3] == 1:
             # On lance l'ia 1 pour qu'elle choisisse son coup
             idMove = ia_1(B, player_0=False)
 
@@ -393,7 +443,7 @@ def launch_n_games(n, ia_0, ia_1):
         # On initialise la grille à chaque début de nouvelle partie
         B = StartingBoard.copy()
 
-        #print('Game ', i)
+        print('Game :', i)
 
         # On récupère le score final de la partie
         score = playout_IA_vs_IA(B, ia_0, ia_1)
@@ -404,10 +454,10 @@ def launch_n_games(n, ia_0, ia_1):
 
 
 
-nb_games = 100
+nb_games = 1000
 
 T0 = time.time()
-scores = launch_n_games(nb_games, IA1KP, IA100P)
+scores = launch_n_games(nb_games, IA10KP, IARand)
 T1 = time.time()
 print("time:",T1-T0)
 
