@@ -2,7 +2,7 @@ import numpy as np
 import random
 import time
 import numba
-from numba import jit  # jit convertit une fonction python => fonction C
+from numba import jit, njit  # jit convertit une fonction python => fonction C
 
 ###################################################################
 
@@ -279,7 +279,8 @@ def IA100P(B, player_0):
     return idBestMove
 
 
-@jit(nopython=True)
+
+@njit(nopython=True, parallel=True)
 def IA1KP(B, player_0):
 
     if player_0:
@@ -288,7 +289,7 @@ def IA1KP(B, player_0):
         best_mean_score = 2
 
     # Simuler tous les coups possibles
-    for move in range(B[-1]):
+    for move in numba.prange(B[-1]):
 
         nb_sim = 1000
 
@@ -296,7 +297,7 @@ def IA1KP(B, player_0):
         scores_sim = np.zeros(nb_sim)
     
         # Simuler nb_sim fois chaque coup
-        for i in range(nb_sim):
+        for i in numba.prange(nb_sim):
 
             # Créer une copie de la grille en cours
             B_sim = B.copy()
@@ -322,53 +323,6 @@ def IA1KP(B, player_0):
 
     return idBestMove
 
-
-# @jit(nopython=True, parallel=True)
-# def IA10KP(B, player_0):
-
-#     if player_0:
-#         best_mean_score = -2
-#     else:
-#         best_mean_score = 2
-
-#     # Simuler tous les coups possibles
-#     for move in numba.prange(B[-1]):
-
-#         nb_sim = 10000
-
-#         # Initialiser la grille de score à chaque simulation d'un nouveau coup
-#         scores_sim = np.empty(nb_sim)
-    
-#         # Simuler nb_sim fois chaque coup
-#         for i in range(nb_sim):
-
-#             # Créer une copie de la grille en cours
-#             B_sim = B.copy()
-            
-#             # Jouer le coup que l'on veut simuler
-#             Play(B_sim, B_sim[move])
-
-#             # Simuler la fin de la partie
-#             while not Terminated(B_sim):
-#                 if B[-3] == 0:
-#                     sim_move = IARand(B_sim)
-#                 else:
-#                     sim_move = IARand(B_sim)
-#                 Play(B_sim, sim_move)
-            
-#             score_sim = GetScore(B_sim)
-#             scores_sim[i] = score_sim
-
-#         # Calculer le score moyen obtenu pour le coup simulé
-#         mean_score = scores_sim.sum()/nb_sim
-
-#         if mean_score > best_mean_score:
-#             best_mean_score = mean_score
-#             idBestMove = B_sim[move]
-
-#     return idBestMove
-
-from numba import njit
 
 @njit(nopython=True, parallel=True)
 def IA10KP(B, player_0):
@@ -454,10 +408,11 @@ def launch_n_games(n, ia_0, ia_1):
 
 
 
+
 nb_games = 1000
 
 T0 = time.time()
-scores = launch_n_games(nb_games, IA10KP, IARand)
+scores = launch_n_games(nb_games, IA1KP, IARand)
 T1 = time.time()
 print("time:",T1-T0)
 
@@ -473,154 +428,3 @@ if percentage_score_player_0 > percentage_score_player_1:
     print('WINNER : Player 0')
 else:
     print('WINNER : Player 1')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# @jit(nopython=True)
-# def IaRand(B):
-#     id = random.randint(0,B[-1]-1)  # select random move
-#     idMove = B[id]
-#     return idMove
-
-
-# @jit(nopython=True)
-# def IA100P(B):
-#     #boucle sur les coups possibles
-#     if B[-1] > 1:
-#         test_min_score=-1
-#         for each in range(B[-1]):
-#             #print(each)
-#             #nouvelle array des résultats de chaque simulation
-#             results_array=np.zeros(100)
-#             #boucle sur les 100 simulations
-#             for i in range(100):
-#                 B_sim = B.copy()
-#                 Play(B_sim,B[each])
-#                 playout_ia_vs_ia(B_sim, IaRand, IA100P)
-#                 results_array[i] = GetScore(B_sim)
-#             #moyenne les 100 parties à venir et sauvegarde pour comparaison
-#             mean_score=results_array.mean()
-#             #meilleur moyenne
-#             if mean_score > test_min_score:
-#                 test_min_score = mean_score
-#                 idBestMove= B[each]
-#         #joue le coup correspondant
-#         #Play(B,idBestMove)
-#     else:
-#         id = random.randint(0,B[-1]-1)  # select random move
-#         idBestMove = B[id]
-#     return idBestMove
-
-# @jit(nopython=True, parallel=True)
-# def IA1KP(B):
-#     if B[-1] <= 3:
-#         #boucle sur les coups possibles
-#         test_min_score=-1
-#         for each in range(B[-1]):
-#             #nouvelle array des résultats de chaque simulation
-#             results_array=np.zeros(1000)
-#             #boucle sur les 100 simulations
-#             for i in numba.prange(1000):
-#                 B_sim = B.copy()
-#                 Play(B_sim,B[each])
-#                 playout_ia_vs_ia(B_sim,IaRand,IaRand)
-#                 results_array[i] = GetScore(B_sim)
-#             #moyenne les 100 parties à venir et sauvegarde pour comparaison
-#             mean_score=results_array.mean()
-#             #meilleur moyenne
-#             if mean_score > test_min_score:
-#                 test_min_score = mean_score
-#                 idBestMove= B[each]
-#         #joue le coup correspondant
-#         #Play(B,idBestMove)
-#     else:
-#         idBestMove= B[random.randint(0,B[-1]-1)]
-#     return idBestMove
-
-# @jit(nopython=True,parallel=True)
-# def IA10KP(B):
-#     if B[-1] <= 3:
-#         #boucle sur les coups possibles
-#         test_min_score=-1
-#         for each in range(B[-1]):
-#             #nouvelle array des résultats de chaque simulation
-#             results_array=np.zeros(10000)
-#             #boucle sur les 100 simulations
-#             for i in range(10000):
-#                 B_sim = B.copy()
-#                 Play(B_sim,B[each])
-#                 playout_ia_vs_ia(B_sim,IA100P,IaRand)
-#                 results_array[i] = GetScore(B_sim)
-#             #moyenne les 100 parties à venir et sauvegarde pour comparaison
-#             mean_score=results_array.mean()
-#             #meilleur moyenne
-#             if mean_score > test_min_score:
-#                 test_min_score = mean_score
-#                 idBestMove= B[each]
-#         #joue le coup correspondant
-#         #Play(B,idBestMove)
-#     else:
-#         idBestMove= B[random.randint(0,B[-1]-1)]
-#     return idBestMove
-
-# @jit(nopython=True)
-# def playout_ia_vs_ia(B,ia_0,ia_1):
-#     #Print(B)
-#     while not Terminated(B):
-#         #si c'est le joueur 0
-#         if B[-3] == 0:
-#             #choix de l'ia
-#             idMove=ia_0(B)
-
-#         #si c'est le joueur 1
-#         elif B[-3]==1:
-#             idMove=ia_1(B)
-
-#         #print("Playing : ",idMove, " -  Player: ",player, "  X:",x," Y:",y)
-#         Play(B,idMove)
-#         #Print(B)
-#         #print("---------------cs-----------------------")
-
-
-# @jit(nopython=True)
-# def launch_n_games(n,player_0,player_1):
-#     scores = np.zeros(n)
-#     for i in range(n):
-#         #if i % 50 ==0:
-#         print("game n°",i)
-#         B = StartingBoard.copy()
-#         playout_ia_vs_ia(B,player_0,player_1)
-#         scores[i] = GetScore(B)
-#     player_0_purcentage = np.count_nonzero(scores == 1)/n*100
-#     player_1_purcentage = np.count_nonzero(scores == -1)/n*100
-#     print("player 0 won",player_0_purcentage,"% of the",n,"games")
-#     print("player 1 won",player_1_purcentage,"% of the",n,"games")
-
-#     print("Mean score: ",np.mean(scores))
-
-# launch_n_games(100,IaRand,IA100P)
