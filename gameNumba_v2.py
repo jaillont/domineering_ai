@@ -226,29 +226,41 @@ dt = T1-T0
 print("Nb Sims / second:", int(nbSimus / dt ))
 """
 @jit(nopython=True)
-def IARand(game: np.ndarray) -> int:
+def IARand(game: np.ndarray, player_0) -> int:
     possible_moves = game[:game[-1]]
     return np.random.choice(possible_moves)
 
 @jit(nopython=True)
-def IA100(game: np.ndarray, n_playouts: int) -> int:
+def IA100(game: np.ndarray, n_playouts: int, player_0) -> int:
     possible_moves = game[:game[-1]]
     scores = np.zeros(len(possible_moves))
     for idx, move in enumerate(possible_moves):
         for _ in range(n_playouts):
             sim_game = game.copy()
             Play(sim_game, move)
+            while not Terminated(sim_game):
+                if B[-3] == 0:
+                    sim_move = IARand(sim_game, player_0=True)
+                else:
+                    sim_move = IARand(sim_game, player_0=False)
+                Play(sim_game, sim_move)
             scores[idx] += GetScore(sim_game)
-    return possible_moves[np.argmax(scores / n_playouts)]
+    if player_0:
+        return possible_moves[np.argmax(scores / n_playouts)]
+    else:
+        return possible_moves[np.argmin(scores / n_playouts)]
 
 
 #@njit(nopython=True,parallel=True)
 @jit(nopython=True, parallel=True)
-def IA10KP(B):
+def IA10KP(B, player_0):
     #_PossibleMoves(B[-3], B)
     possible_moves = game[:game[-1]]
     best_move = 0
-    best_score = -1
+    if player_0:
+        best_score = -2
+    else:
+        best_score = 2
     for i in numba.prange(B[-1]):
         move = B[i]
         score = 0
@@ -257,13 +269,21 @@ def IA10KP(B):
             sim_game[-3] = B[-3]
             Play(sim_game, move)
             while not Terminated(sim_game):
-                sim_move = IARand(sim_game)
+                if B[-3] == 0:
+                    sim_move = IARand(sim_game, player_0=True)
+                else:
+                    sim_move = IARand(sim_game, player_0=False)
                 Play(sim_game, sim_move)
             score += GetScore(sim_game)
         score /= 10000
-        if score > best_score:
-            best_score = score
-            best_move = move
+        if player_0:
+            if score > best_score:
+                best_score = score
+                best_move = move
+        else:
+            if score < best_score:
+                best_score = score
+                best_move = move
     return best_move
 
 # Number of games to play
@@ -278,12 +298,14 @@ T0 = time.time()
 for i in range(n_games):
     game = StartingBoard.copy()
     while not Terminated(game):
-        move_IA1 = IA10KP(game)
-        Play(game, move_IA1)
-        if Terminated(game):
-            break
-        move_IA2 = IARand(game)
-        Play(game, move_IA2)
+        if game[-3] == 0:
+            move_IA1 = IA10KP(game, player_0=True)
+            Play(game, move_IA1)
+            if Terminated(game):
+                break
+        if game[-3] == 1:
+            move_IA2 = IA100(game, 1000, player_0=False)
+            Play(game, move_IA2)
     score = GetScore(game)
     scores.append(score)
     if score == 1:
