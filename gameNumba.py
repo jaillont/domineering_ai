@@ -3,6 +3,7 @@ import random
 import time
 import numba
 from numba import jit, njit  # jit convertit une fonction python => fonction C
+import math
 
 ###################################################################
 
@@ -120,6 +121,7 @@ def Play(B,idMove):
 
     if B[-1] == 0  :             # gameover
         B[-2] = (player+1)*10    # player 0 win => 10  / player 1 win => 20
+    #rajouter dans la liste ou retourner p,x,y
 
 
 @jit(nopython=True)
@@ -406,20 +408,125 @@ def launch_n_games(n, ia_0, ia_1):
 
     return scores
 
+@jit(nopython=True)
+def UCT(mean_score,parent_n,n):
+    coef=0.1
+    idx = mean_score+coef*np.sqrt(np.log(parent_n)/n)
+    return idx
+
+
+#@jit("i8(i8[:],i8,i8,i8[:],i8[:],i8[:])")#float64(int32, int32))
+def MCTS(B,n_turn,game_n,game_tree,games_trees,games_scores):
+    #Contrôle si il s'agit d'un début de partie ou d'une nouvelle série de partie
+    #create the array that will contain this game nodes
+    #print("gametrees",games_trees)
+    #game_nodes=np.zeros(0)
+    #print(B[3])
+    #print(game_n)
+    best_move_idx=IARand(B,False)
+
+    if game_n < 100 or n_turn==0: #or games_trees == np.zeros(0):
+        best_move_idx=IARand(B,False)
+        #print("hello")
+        #print(n_turn)
+        #print(games_trees)
+    else :
+        #print("game n:", game_n)
+        #print("game_tree:", game_tree)
+        best_move_value=0
+        for move in range(B[-1]):
+            parent_node = game_tree[-1]
+            parent_node_count = 0
+            node_scores=np.empty(0)
+            current_node_count=0
+            for i in range(games_trees.shape[0]):
+                t=False
+                sub_arr = games_trees[i]
+                for x in range(sub_arr.shape[0]): 
+                    if sub_arr[x] == parent_node:
+                        parent_node_count = parent_node_count + 1
+                        t=True
+                    if sub_arr[x] == B[move]:
+                        current_node_count = current_node_count + 1 
+                        #print("current node",current_node_count) 
+                    if t:
+                        node_scores = np.append(node_scores, games_scores[i])
+                        #print("node_scores",node_scores)
+                        node_mean_score = np.mean(node_scores)
+                #if current_node_count != 0 and t:
+                    #print("mean",node_scores,"parent_n",parent_node_count,"n",current_node_count)
+                #if current_node_count != 0 and not t:
+                #    pass
+            value=UCT(mean_score=node_mean_score,parent_n=parent_node_count,n=current_node_count)
+                    #print("value:",value)
+            if value > best_move_value:
+                best_move_idx = B[move]
+                best_move_value = value
+    #remove unused indexes from the array
+    #Noeuds
+    return best_move_idx
+
+#@njit(nopython=True,parallel=True)
+from numba.extending import overload
+
+#@overload(np.array)
+def MCTS_vs_ia(n_games,ia_1):
+    games_trees=np.zeros(n_games, dtype=np.ndarray)
+
+    games_scores = np.zeros(n_games)
+
+    for i in range(n_games):
+        print("game n:",i)
+        B = StartingBoard.copy()
+        game_tree=np.empty(0)
+        n_turn=0
+        while B[-1] != 0:
+        # Si c'est au tour du joueur 0
+            if B[-3] == 0:
+            # On lance l'ia 0 pour qu'elle choisisse son coup
+                non_zero_games_trees = games_trees[:i]
+                non_zero_games_scores = games_scores[:i]
+                id_move = MCTS(B,n_turn,i,game_tree,non_zero_games_trees,non_zero_games_scores) 
+                #print(id_move)
+                game_tree=np.append(game_tree,id_move)
+                n_turn = n_turn + 1
+
+        # Si c'est au tour du joueur 1
+            elif B[-3] == 1:
+            # On lance l'ia 1 pour qu'elle choisisse son coup
+                id_move = ia_1(B, player_0=False)
+        # On jour le coup choisit sur la grille, et on actualise en conséquence
+            Play(B,id_move)
+
+        #print(game_tree)
+        #games_trees=np.append(games_trees,game_tree)
+        games_trees[i]=game_tree
+
+        #print(games_trees.shape[0])
+        #print(games_trees[i])
+        games_scores[i]=GetScore(B)
+
+
+        # On affiche la nouvelle grille
+        #Print(B)
+    
+    return games_scores
 
 
 
-nb_games = 1000
+
+nb_games = 200
 
 T0 = time.time()
-scores = launch_n_games(nb_games, IA1KP, IARand)
+#scores = launch_n_games(nb_games, IA1KP, IARand)
+scores = MCTS_vs_ia(nb_games,IARand)
 T1 = time.time()
 print("time:",T1-T0)
 
-print("Scores :", scores, '\n')
-
-percentage_score_player_0 = scores[scores == 1].sum()*100/nb_games
-percentage_score_player_1 = -scores[scores == -1].sum()*100/nb_games
+#print("Scores :", scores, '\n')
+scores=scores[100:]
+percentage_score_player_0 = scores[scores == 1].sum()#*100/nb_games
+percentage_score_player_1 = -scores[scores == -1].sum()#*100/nb_games
 
 print("Score player 0 :", percentage_score_player_0, '%')
 print("Score player 1 :", percentage_score_player_1, '%\n')
@@ -428,3 +535,5 @@ if percentage_score_player_0 > percentage_score_player_1:
     print('WINNER : Player 0')
 else:
     print('WINNER : Player 1')
+
+
