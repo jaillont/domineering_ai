@@ -625,8 +625,6 @@ def MCTS_vs_ia(n_games,ia_1):
                 # On jour le coup choisit sur la grille, et on actualise en conséquence
                 Play(B,id_move)
 
-
-
             games_scores[i]=GetScore(B)
 
 
