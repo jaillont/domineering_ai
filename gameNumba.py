@@ -229,6 +229,13 @@ def ParrallelPlayout(nb):
 
 
 
+
+
+
+
+
+
+
 @jit(nopython=True)
 def IARand(B, player_0=False):
     id = random.randint(0, B[-1]-1)
@@ -408,15 +415,27 @@ def launch_n_games(n, ia_0, ia_1):
 
     return scores
 
+
+
+
+
+
+
+
+
+
 @jit(nopython=True)
-def UCT(mean_score,parent_n,n):
+def UCT(mean_score,parent_n,n, player_0):
     coef=0.1
-    idx = mean_score+coef*np.sqrt(np.log(parent_n)/n)
+    if player_0:
+        idx = mean_score+coef*np.sqrt(np.log(parent_n)/n)
+    else:
+        idx = -mean_score+coef*np.sqrt(np.log(parent_n)/n)
     return idx
 
 
 #@jit("i8(i8[:],i8,i8,i8[:],i8[:],i8[:])")#float64(int32, int32))
-def MCTS(B,n_turn,game_n,game_tree,games_trees,games_scores):
+def MCTS(B,n_turn,game_n,game_tree,games_trees,games_scores, player_0):
     #Contrôle si il s'agit d'un début de partie ou d'une nouvelle série de partie
     #create the array that will contain this game nodes
     #print("gametrees",games_trees)
@@ -457,76 +476,207 @@ def MCTS(B,n_turn,game_n,game_tree,games_trees,games_scores):
                     #print("mean",node_scores,"parent_n",parent_node_count,"n",current_node_count)
                 #if current_node_count != 0 and not t:
                 #    pass
-            value=UCT(mean_score=node_mean_score,parent_n=parent_node_count,n=current_node_count)
+            value=UCT(mean_score=node_mean_score,parent_n=parent_node_count,n=current_node_count, player_0=player_0)
                     #print("value:",value)
-            if value > best_move_value:
-                best_move_idx = B[move]
-                best_move_value = value
+
+            if player_0:
+                if value > best_move_value:
+                    best_move_idx = B[move]
+                    best_move_value = value
+            else:
+                if value < best_move_value:
+                    best_move_idx = B[move]
+                    best_move_value = value
     #remove unused indexes from the array
     #Noeuds
     return best_move_idx
 
-#@njit(nopython=True,parallel=True)
-from numba.extending import overload
+
+#################
+### UCT logic ###
+#################
+
+class Node:
+    
+    def __init__(self, board_state, parent_node=None):
+
+        self.board_state = board_state.copy()
+
+        self.score = 0
+        self.visits = 0
+
+        self.child_nodes = []
+        self.parent_node = parent_node
+
+        self.move = None
+
+    
+    def add_child(self, move):
+        child = Node(self.board_state.copy(), self)
+        Play(child.board_state, move)
+        child.move = move
+        self.child_nodes.append(child)
+        return child
+
+    
+    def update(self, result):
+        self.visits += 1
+        self.score += result
+
+
+    def fully_expanded(self):
+        return all(child.visits > 0 for child in self.child_nodes) and len(self.child_nodes) > 0
+
+    
+    def _uct_value(self, coef=1.41421356237):
+        return (self.score / self.visits) + coef * (np.log(self.parent_node.visits) / self.visits) ** 0.5
+
+
+    def best_child(self):
+        return max(self.child_nodes, key=lambda x: x._uct_value())
+
+
+    def simulate(self):
+        board_state = self.board_state.copy()
+        while not Terminated(board_state):
+            # select a random move from the list of possible moves
+            idx = random.randint(0, board_state[-1]-1)
+            id_move = board_state[idx]
+            Play(board_state, id_move)
+        # return the score of the game
+        return GetScore(board_state)
+
+
+def monte_carlo_tree_search(board_state):
+    root = Node(board_state)
+
+    for i in range(16):
+
+        # Initialisation de l'arbre
+        if i == 0:
+            if root.child_nodes == []:
+                _PossibleMoves(root.board_state[-3], root.board_state)
+                possible_moves = root.board_state[:root.board_state[-1]]
+
+                for move in possible_moves:
+                    root.child_nodes.append(root.add_child(move))
+
+            if not root.fully_expanded():
+
+                for child in root.child_nodes:
+                    result = child.simulate()
+                    child.update(result)
+                    root.update(result)
+
+        # Profondeur 1
+        else:
+            if node.child_nodes == []:
+                _PossibleMoves(node.board_state[-3], node.board_state)
+                possible_moves = node.board_state[:node.board_state[-1]]
+
+                for move in possible_moves:
+                    node.child_nodes.append(node.add_child(move))
+
+            if not node.fully_expanded():
+
+                for child in node.child_nodes:
+                    result = child.simulate()
+                    child.update(result)
+                    node.update(result)
+                    root.update(result)
+
+        node = root.best_child()
+
+    move = root.best_child().move
+
+    return move
 
 #@overload(np.array)
 def MCTS_vs_ia(n_games,ia_1):
-    games_trees=np.zeros(n_games, dtype=np.ndarray)
 
     games_scores = np.zeros(n_games)
+    data = []
 
     for i in range(n_games):
         print("game n:",i)
         B = StartingBoard.copy()
-        game_tree=np.empty(0)
-        n_turn=0
-        while B[-1] != 0:
-        # Si c'est au tour du joueur 0
-            if B[-3] == 0:
-            # On lance l'ia 0 pour qu'elle choisisse son coup
-                non_zero_games_trees = games_trees[:i]
-                non_zero_games_scores = games_scores[:i]
-                id_move = MCTS(B,n_turn,i,game_tree,non_zero_games_trees,non_zero_games_scores) 
-                #print(id_move)
-                game_tree=np.append(game_tree,id_move)
-                n_turn = n_turn + 1
 
-        # Si c'est au tour du joueur 1
-            elif B[-3] == 1:
-            # On lance l'ia 1 pour qu'elle choisisse son coup
-                id_move = ia_1(B, player_0=False)
-        # On jour le coup choisit sur la grille, et on actualise en conséquence
-            Play(B,id_move)
+        nb_UCT_player = 0
 
-        #print(game_tree)
-        #games_trees=np.append(games_trees,game_tree)
-        games_trees[i]=game_tree
+        if nb_UCT_player == 0:
+            while B[-1] != 0:
+            # Si c'est au tour du joueur 0
+                if B[-3] == 0:
+                    id_move = monte_carlo_tree_search(B.copy())
 
-        #print(games_trees.shape[0])
-        #print(games_trees[i])
-        games_scores[i]=GetScore(B)
+            # Si c'est au tour du joueur 1
+                elif B[-3] == 1:
+                # On lance l'ia 1 pour qu'elle choisisse son coup
+                    id_move = ia_1(B.copy(), player_0=False)
+
+                # Get game data
+                board = B[64:128].reshape(8,8)
+                negative_board = 1 - board
+                board = 1 - negative_board
+                player, x, y = DecodeIDmove(id_move)
+                player_plan = [[player]*8]*8
+                data.append([board, negative_board, player_plan, id_move])
+
+                # On jour le coup choisit sur la grille, et on actualise en conséquence
+                Play(B,id_move)
 
 
-        # On affiche la nouvelle grille
-        #Print(B)
+
+            games_scores[i]=GetScore(B)
+
+
+            # On affiche la nouvelle grille
+            #Print(B)
+
+        elif nb_UCT_player == 1:
+            while B[-1] != 0:
+                # Si c'est au tour du joueur 0
+                if B[-3] == 0:
+                    # On lance l'ia 1 pour qu'elle choisisse son coup
+                    id_move = ia_1(B, player_0=True)
+
+                # Si c'est au tour du joueur 1
+                elif B[-3] == 1:
+                    board_state = B
+                    id_move = monte_carlo_tree_search(board_state)
+
+                # Get game data
+                board = B[64:128].reshape(8,8)
+                negative_board = 1 - board
+                board = 1 - negative_board
+                player, x, y = DecodeIDmove(id_move)
+                player_plan = [[player]*8]*8
+                data.append([board, negative_board, player_plan, id_move])
+
+                # On jour le coup choisit sur la grille, et on actualise en conséquence
+                Play(B,id_move)
+
+            #print(games_trees.shape[0])
+            #print(games_trees[i])
+            games_scores[i]=GetScore(B)
     
-    return games_scores
+    return games_scores, data
 
 
 
 
-nb_games = 200
+nb_games = 10
 
 T0 = time.time()
 #scores = launch_n_games(nb_games, IA1KP, IARand)
-scores = MCTS_vs_ia(nb_games,IARand)
+scores, data = MCTS_vs_ia(nb_games,IARand)
 T1 = time.time()
 print("time:",T1-T0)
 
 #print("Scores :", scores, '\n')
-scores=scores[100:]
-percentage_score_player_0 = scores[scores == 1].sum()#*100/nb_games
-percentage_score_player_1 = -scores[scores == -1].sum()#*100/nb_games
+#scores=scores[100:]
+percentage_score_player_0 = scores[scores == 1].sum()*100/nb_games
+percentage_score_player_1 = -scores[scores == -1].sum()*100/nb_games
 
 print("Score player 0 :", percentage_score_player_0, '%')
 print("Score player 1 :", percentage_score_player_1, '%\n')
@@ -537,3 +687,7 @@ else:
     print('WINNER : Player 1')
 
 
+import pickle
+
+with open('data.pkl', 'wb') as f:
+    pickle.dump(data, f)
