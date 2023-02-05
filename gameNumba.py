@@ -536,7 +536,7 @@ def launch_n_games(n, ia_0, ia_1):
 nb_games = 200
 
 T0 = time.time()
-scores = launch_n_games(nb_games, monte_carlo_tree_search, IA10KP)
+scores = launch_n_games(nb_games, find_best_action_deep, IARand)
 #scores, data = MCTS_vs_ia(nb_games,find_best_action_deep)
 T1 = time.time()
 print("time:",T1-T0)
@@ -551,95 +551,3 @@ if percentage_score_player_0 > percentage_score_player_1:
     print('WINNER : Player 0')
 else:
     print('WINNER : Player 1')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#@overload(np.array)
-def MCTS_vs_ia(n_games,ia_1):
-
-    games_scores = np.zeros(n_games)
-    data = []
-
-    for i in range(n_games):
-        print("game n:",i)
-        B = StartingBoard.copy()
-
-        nb_UCT_player = 1
-
-        if nb_UCT_player == 0:
-            while B[-1] != 0:
-            # Si c'est au tour du joueur 0
-                if B[-3] == 0:
-                    id_move = monte_carlo_tree_search(B.copy())
-
-            # Si c'est au tour du joueur 1
-                elif B[-3] == 1:
-                # On lance l'ia 1 pour qu'elle choisisse son coup
-                    id_move = ia_1(B.copy(), player_0=False)
-                    print(id_move)
-
-                # Get game data
-                board = B[64:128].reshape(8,8)
-                negative_board = 1 - board
-                board = 1 - negative_board
-                player, x, y = DecodeIDmove(id_move)
-                player_plan = [[player]*8]*8
-                data.append([board, negative_board, player_plan, id_move])
-
-                # On jour le coup choisit sur la grille, et on actualise en conséquence
-                Play(B,id_move)
-
-            games_scores[i]=GetScore(B)
-
-
-            # On affiche la nouvelle grille
-            #Print(B)
-
-        elif nb_UCT_player == 1:
-            while B[-1] != 0:
-                # Si c'est au tour du joueur 0
-                if B[-3] == 0:
-                    # On lance l'ia 1 pour qu'elle choisisse son coup
-                    id_move = ia_1(B, player_0=True)
-
-                # Si c'est au tour du joueur 1
-                elif B[-3] == 1:
-                    board_state = B
-                    id_move = monte_carlo_tree_search(board_state)
-
-                # Get game data
-                board = B[64:128].reshape(8,8)
-                negative_board = 1 - board
-                board = 1 - negative_board
-                player, x, y = DecodeIDmove(id_move)
-                player_plan = [[player]*8]*8
-                data.append([board, negative_board, player_plan, id_move])
-
-                # On jour le coup choisit sur la grille, et on actualise en conséquence
-                Play(B,id_move)
-
-            #print(games_trees.shape[0])
-            #print(games_trees[i])
-            games_scores[i]=GetScore(B)
-    
-    return games_scores, data
