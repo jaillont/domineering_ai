@@ -533,10 +533,10 @@ def launch_n_games(n, ia_0, ia_1):
     return scores
 
 
-nb_games = 200
+nb_games = 100
 
 T0 = time.time()
-scores = launch_n_games(nb_games, find_best_action_deep, IARand)
+scores = launch_n_games(nb_games, find_best_action_deep, monte_carlo_tree_search)
 #scores, data = MCTS_vs_ia(nb_games,find_best_action_deep)
 T1 = time.time()
 print("time:",T1-T0)
