@@ -1,6 +1,6 @@
-# domineering_ai
+# domineering_ai 🎲
 
-Dans ce projet vous trouverez différentes implémentations d'IA pour résoudre le jeu domineering 🎲:  
+Dans ce projet vous trouverez différentes implémentations d'IA pour résoudre le jeu domineering :  
 IARAND:joue aléatoirement  
 IA100P: 100 coups avant de jouer  
 IA1KP: 1.000 coups avant de jouer  
