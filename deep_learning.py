@@ -1,6 +1,6 @@
 import glob
 import pickle 
-
+import matplotlib.pyplot as plt
 
 ### To load the data ###
 
@@ -42,17 +42,16 @@ def model_deep(data):
 
     model.add(Conv2D(256, kernel_size=(3,3), activation='relu', padding='same'))
     model.add(BatchNormalization())
+    model.add(MaxPooling2D(pool_size=(2,2)))
 
     # Flattening the output from the convolutional layers
     model.add(Flatten())
 
     # Adding a dense layer for classification
-    model.add(Dense(512, activation='relu'))
+    model.add(Dense(256, activation='relu'))
     model.add(BatchNormalization())
-    model.add(Dropout(0.5))
-    model.add(Dense(512, activation='relu'))
+    model.add(Dense(128, activation='relu'))
     model.add(BatchNormalization())
-    model.add(Dropout(0.5))
 
     # Output layer with the number of possible moves as the number of nodes
     model.add(Dense(168, activation='softmax'))
@@ -78,7 +77,26 @@ def model_deep(data):
 
     # # fit the model on the train set
     # model.fit(X_train, y_train)
-    model.fit(X_train, y_train, validation_data=(X_test, y_test),epochs=10,batch_size=2048)
+    history = model.fit(X_train, y_train, validation_data=(X_test, y_test),epochs=1,batch_size=64)
+
+    # Plot the training and validation loss
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper right')
+    plt.savefig('loss_plot.png')
+
+
+    # Plot the training and validation accuracy
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper right')
+    plt.savefig('accuracy_plot.png')
 
     return model 
 

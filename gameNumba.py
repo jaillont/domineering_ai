@@ -1,9 +1,11 @@
-import numpy as np
 import random
 import time
 import numba
-from numba import jit, njit  # jit convertit une fonction python => fonction C
-import math
+
+import numpy as np
+
+from numba import jit  # jit convertit une fonction python => fonction C
+from keras.models import load_model
 
 ###################################################################
 
@@ -42,9 +44,6 @@ def DecodeIDmove(IDmove):
 # B[-1] : number of possible moves
 # B[-2] : reserved
 # B[-3] : current player
-
-
-
 
 StartingBoard  = np.zeros(144,dtype=np.uint8)
 
@@ -170,56 +169,6 @@ def PlayoutDebug(B,verbose=False):
         print("---------------------------------------")
 
 
-################################################################
-#
-#  Version Debug Demo pour affichage et test
-
-#B = StartingBoard.copy()
-#PlayoutDebug(B,True)
-#print("Score : ",GetScore(B))
-#print("")
-
-
-################################################################
-#
-#   utilisation de numba => 100 000 parties par seconde
-
-#print("Test perf Numba")
-
-#T0 = time.time()
-#nbSimus = 0
-#while time.time()-T0 < 2:
-#    B = StartingBoard.copy()
-#    Playout(B)
-#    nbSimus+=1
-#print("Nb Sims / second:",nbSimus/2)
-
-
-################################################################
-#
-#   utilisation de numba +  multiprocess => 1 000 000 parties par seconde
-
-#print()
-#print("Test perf Numba + parallélisme")
-
-@numba.jit(nopython=True, parallel=True)
-def ParrallelPlayout(nb):
-    Scores = np.empty(nb)
-    for i in numba.prange(nb):
-        B = StartingBoard.copy()
-        Playout(B)
-        Scores[i] = GetScore(B)
-    return Scores.mean()
-
-
-
-#nbSimus = 10 * 1000 * 1000
-#T0 = time.time()
-#MeanScores = ParrallelPlayout(nbSimus)
-#T1 = time.time()
-#dt = T1-T0
-
-#print("Nb Sims / second:", int(nbSimus / dt ))
 
 
 ################################################################
@@ -227,29 +176,20 @@ def ParrallelPlayout(nb):
 #   Nous allons mettre en place l’IA de jeu la plus simple possible. En effet, cette IA va récupérer la liste des coups possibles et en choisir 1 au hasard.
 
 
-
-
-
-
-
-
-
-
-
-@jit(nopython=True)
-def IARand(B, player_0=False):
+def IARand(B):
     id = random.randint(0, B[-1]-1)
     idMove = B[id]
-    
-    return idMove
+
+    Play(B,idMove)
 
 
-@jit(nopython=True)
-def IA100P(B, player_0):
+def IA100P(B):
 
-    if player_0:
+    # Si l'IA est joueur 0
+    if B[-3] == 0:
         best_mean_score = -2
-    else:
+    # Si l'IA est joueur 1
+    elif B[-3] == 1:
         best_mean_score = 2
 
     # Simuler tous les coups possibles
@@ -269,232 +209,115 @@ def IA100P(B, player_0):
             # Jouer le coup que l'on veut simuler
             Play(B_sim, B_sim[move])
 
-            # Simuler la fin de la partie
-            score_sim = playout_IA_vs_IA(B_sim, IARand, IARand)
-            scores_sim[i] = score_sim
+            # Simuler la fin de la partie 
+            Playout(B_sim)
+
+            # Récupérer le score de la partie
+            scores_sim[i] = GetScore(B_sim)
 
         # Calculer le score moyen obtenu pour le coup simulé
         mean_score = scores_sim.sum()/nb_sim
 
-        if player_0:
+        # Si l'IA est joueur 0
+        if B[-3] == 0:
             if mean_score > best_mean_score:
                 best_mean_score = mean_score
                 idBestMove = B_sim[move]
-        else:
+        # Si l'IA est joueur 1
+        elif B[-3] == 1:
             if mean_score < best_mean_score:
                 best_mean_score = mean_score
                 idBestMove = B_sim[move]
 
-    return idBestMove
+    Play(B, idBestMove)
 
 
+@numba.jit(nopython=True, parallel=True)
+def ParrallelPlayout(nb, B):
+    Scores = np.empty(nb)
+    for i in numba.prange(nb):
+        Playout(B)
+        Scores[i] = GetScore(B)
+    return Scores.mean()
 
-@njit(nopython=True, parallel=True)
-def IA1KP(B, player_0):
 
-    if player_0:
+def IA1KP(B):
+
+    # Si l'IA est joueur 0
+    if B[-3] == 0:
         best_mean_score = -2
-    else:
+    # Si l'IA est joueur 1
+    elif B[-3] == 1:
         best_mean_score = 2
 
     # Simuler tous les coups possibles
-    for move in numba.prange(B[-1]):
+    for move in range(B[-1]):
 
         nb_sim = 1000
 
-        # Initialiser la grille de score à chaque simulation d'un nouveau coup
-        scores_sim = np.zeros(nb_sim)
-    
-        # Simuler nb_sim fois chaque coup
-        for i in numba.prange(nb_sim):
+        # Créer une copie de la grille en cours
+        B_sim = B.copy()
+        
+        # Jouer le coup que l'on veut simuler
+        Play(B_sim, B_sim[move])
 
-            # Créer une copie de la grille en cours
-            B_sim = B.copy()
-            
-            # Jouer le coup que l'on veut simuler
-            Play(B_sim, B_sim[move])
+        # Simuler la fin de la partie
+        mean_score = ParrallelPlayout(nb_sim, B_sim)
 
-            # Simuler la fin de la partie
-            score_sim = playout_IA_vs_IA(B_sim, IARand, IARand)
-            scores_sim[i] = score_sim
-
-        # Calculer le score moyen obtenu pour le coup simulé
-        mean_score = scores_sim.sum()/nb_sim
-
-        if player_0:
+        # Si l'IA est joueur 0
+        if B[-3] == 0:
             if mean_score > best_mean_score:
                 best_mean_score = mean_score
                 idBestMove = B_sim[move]
-        else:
+        # Si l'IA est joueur 1
+        elif B[-3] == 1:
             if mean_score < best_mean_score:
                 best_mean_score = mean_score
                 idBestMove = B_sim[move]
 
-    return idBestMove
+    Play(B, idBestMove)
 
 
-@njit(nopython=True, parallel=True)
-def IA10KP(B, player_0):
+def IA10KP(B):
 
-    if player_0:
+    # Si l'IA est joueur 0
+    if B[-3] == 0:
         best_mean_score = -2
-    else:
+    # Si l'IA est joueur 1
+    elif B[-3] == 1:
         best_mean_score = 2
 
-    for move in numba.prange(B[-1]):
+    # Simuler tous les coups possibles
+    for move in range(B[-1]):
 
         nb_sim = 10000
-        scores_sim = np.zeros(nb_sim)
 
-        for i in numba.prange(nb_sim):
-
-            # Créer une copie de la grille en cours
-            B_sim = B.copy()
-            
-            # Jouer le coup que l'on veut simuler
-            Play(B_sim, B_sim[move])
-
-            score_sim = playout_IA_vs_IA(B_sim, IARand, IARand)
-            scores_sim[i] = score_sim
+        # Créer une copie de la grille en cours
+        B_sim = B.copy()
         
-        # Calculer le score moyen obtenu pour le coup simulé
-        mean_score = scores_sim.sum()/nb_sim
+        # Jouer le coup que l'on veut simuler
+        Play(B_sim, B_sim[move])
 
-        if player_0:
+        # Simuler la fin de la partie
+        mean_score = ParrallelPlayout(nb_sim, B_sim)
+
+        # Si l'IA est joueur 0
+        if B[-3] == 0:
             if mean_score > best_mean_score:
                 best_mean_score = mean_score
-                idBestMove = B[move]
-        else:
+                idBestMove = B_sim[move]
+        # Si l'IA est joueur 1
+        elif B[-3] == 1:
             if mean_score < best_mean_score:
                 best_mean_score = mean_score
-                idBestMove = B[move]
+                idBestMove = B_sim[move]
 
-    return idBestMove
-
-
-@jit(nopython=True)
-def playout_IA_vs_IA(B, ia_0, ia_1):
-    # On affiche la grille initialisée
-    #Print(B)
-    # Tant qu'il n'y a pas de Game Over
-    while not Terminated(B):
-        # Si c'est au tour du joueur 0
-        if B[-3] == 0:
-            # On lance l'ia 0 pour qu'elle choisisse zon coup
-            idMove = ia_0(B, player_0=True) 
-
-        # Si c'est au tour du joueur 1
-        elif B[-3] == 1:
-            # On lance l'ia 1 pour qu'elle choisisse son coup
-            idMove = ia_1(B, player_0=False)
-
-        # On jour le coup choisit sur la grille, et on actualise en conséquence
-        Play(B,idMove)
-
-        # On affiche la nouvelle grille
-        #Print(B)
-    
-    return GetScore(B)
+    Play(B, idBestMove)
 
 
-@jit(nopython=True)
-def launch_n_games(n, ia_0, ia_1):
-    # On déclare un Numpy Array à 0 pour stocker le score
-    scores = np.zeros(n)
-
-    for i in range(n):
-        # On initialise la grille à chaque début de nouvelle partie
-        B = StartingBoard.copy()
-
-        print('Game :', i)
-
-        # On récupère le score final de la partie
-        score = playout_IA_vs_IA(B, ia_0, ia_1)
-        # On stcoke le résultat dans un Array Numpy dédié
-        scores[i] = score
-
-    return scores
-
-
-
-
-
-
-
-
-
-
-@jit(nopython=True)
-def UCT(mean_score,parent_n,n, player_0):
-    coef=0.1
-    if player_0:
-        idx = mean_score+coef*np.sqrt(np.log(parent_n)/n)
-    else:
-        idx = -mean_score+coef*np.sqrt(np.log(parent_n)/n)
-    return idx
-
-
-#@jit("i8(i8[:],i8,i8,i8[:],i8[:],i8[:])")#float64(int32, int32))
-def MCTS(B,n_turn,game_n,game_tree,games_trees,games_scores, player_0):
-    #Contrôle si il s'agit d'un début de partie ou d'une nouvelle série de partie
-    #create the array that will contain this game nodes
-    #print("gametrees",games_trees)
-    #game_nodes=np.zeros(0)
-    #print(B[3])
-    #print(game_n)
-    best_move_idx=IARand(B,False)
-
-    if game_n < 100 or n_turn==0: #or games_trees == np.zeros(0):
-        best_move_idx=IARand(B,False)
-        #print("hello")
-        #print(n_turn)
-        #print(games_trees)
-    else :
-        #print("game n:", game_n)
-        #print("game_tree:", game_tree)
-        best_move_value=0
-        for move in range(B[-1]):
-            parent_node = game_tree[-1]
-            parent_node_count = 0
-            node_scores=np.empty(0)
-            current_node_count=0
-            for i in range(games_trees.shape[0]):
-                t=False
-                sub_arr = games_trees[i]
-                for x in range(sub_arr.shape[0]): 
-                    if sub_arr[x] == parent_node:
-                        parent_node_count = parent_node_count + 1
-                        t=True
-                    if sub_arr[x] == B[move]:
-                        current_node_count = current_node_count + 1 
-                        #print("current node",current_node_count) 
-                    if t:
-                        node_scores = np.append(node_scores, games_scores[i])
-                        #print("node_scores",node_scores)
-                        node_mean_score = np.mean(node_scores)
-                #if current_node_count != 0 and t:
-                    #print("mean",node_scores,"parent_n",parent_node_count,"n",current_node_count)
-                #if current_node_count != 0 and not t:
-                #    pass
-            value=UCT(mean_score=node_mean_score,parent_n=parent_node_count,n=current_node_count, player_0=player_0)
-                    #print("value:",value)
-
-            if player_0:
-                if value > best_move_value:
-                    best_move_idx = B[move]
-                    best_move_value = value
-            else:
-                if value < best_move_value:
-                    best_move_idx = B[move]
-                    best_move_value = value
-    #remove unused indexes from the array
-    #Noeuds
-    return best_move_idx
-
-
-#################
-### UCT logic ###
-#################
+###########################
+###### UCT algorithm ######
+###########################
 
 class Node:
     
@@ -528,12 +351,16 @@ class Node:
         return all(child.visits > 0 for child in self.child_nodes) and len(self.child_nodes) > 0
 
     
-    def _uct_value(self, coef=1.41421356237):
+    def _uct_value(self, coef=1.4):
         return (self.score / self.visits) + coef * (np.log(self.parent_node.visits) / self.visits) ** 0.5
 
 
-    def best_child(self):
-        return max(self.child_nodes, key=lambda x: x._uct_value())
+    def best_child(self, max_formula):
+        if max_formula:
+            formula = max(self.child_nodes, key=lambda x: x._uct_value())
+        else:
+            formula = min(self.child_nodes, key=lambda x: x._uct_value())
+        return formula
 
 
     def simulate(self):
@@ -554,9 +381,14 @@ def monte_carlo_tree_search(board_state):
 
         # Initialisation de l'arbre
         if i == 0:
-            if root.child_nodes == []:
-                _PossibleMoves(root.board_state[-3], root.board_state)
-                possible_moves = root.board_state[:root.board_state[-1]]
+
+            _PossibleMoves(root.board_state[-3], root.board_state)
+            possible_moves = root.board_state[:root.board_state[-1]]
+
+            if len(possible_moves) == 0:
+                break
+
+            elif root.child_nodes == []:
 
                 for move in possible_moves:
                     root.child_nodes.append(root.add_child(move))
@@ -570,26 +402,177 @@ def monte_carlo_tree_search(board_state):
 
         # Profondeur 1
         else:
-            if node.child_nodes == []:
-                _PossibleMoves(node.board_state[-3], node.board_state)
-                possible_moves = node.board_state[:node.board_state[-1]]
 
-                for move in possible_moves:
-                    node.child_nodes.append(node.add_child(move))
+            for j in range(16):
 
-            if not node.fully_expanded():
+                if j == 0:
 
-                for child in node.child_nodes:
-                    result = child.simulate()
-                    child.update(result)
-                    node.update(result)
-                    root.update(result)
+                    _PossibleMoves(node.board_state[-3], node.board_state)
+                    possible_moves = node.board_state[:node.board_state[-1]]
 
-        node = root.best_child()
+                    if len(possible_moves) == 0:
+                        break
 
-    move = root.best_child().move
+                    elif node.child_nodes == []:
 
-    return move
+                        for move in possible_moves:
+                            node.child_nodes.append(node.add_child(move))
+
+                    if not node.fully_expanded():
+
+                        for child in node.child_nodes:
+                            result = child.simulate()
+                            child.update(result)
+                            node.update(result)
+                            root.update(result)
+
+                # Profondeur 2
+                else:
+                    _PossibleMoves(node.board_state[-3], node.board_state)
+                    possible_moves = node.board_state[:node.board_state[-1]]
+
+                    if len(possible_moves) == 0:
+                        break
+
+                    elif node.child_nodes == []:
+
+                        for move in possible_moves:
+                            node.child_nodes.append(node.add_child(move))
+
+                    if not node.fully_expanded():
+
+                        for child in node.child_nodes:
+                            result = child.simulate()
+                            child.update(result)
+                            node.parent_node.update(result)
+                            node.update(result)
+                            root.update(result)
+                
+                if board_state[-3] == 0:
+                    node = node.best_child(max_formula = True)
+                else:
+                    node = node.best_child(max_formula = False)
+
+        if board_state[-3] == 0:
+            node = root.best_child(max_formula = True)
+        else:
+            node = root.best_child(max_formula = False)
+
+    if board_state[-3] == 0:
+        move = root.best_child(max_formula = True).move
+    else:
+        move = root.best_child(max_formula = False).move
+
+    Play(board_state,move)
+
+
+#######################
+#### DEEP LEARNING ####
+#######################
+
+def find_best_action_deep(B):
+
+    model = load_model('alexNet_model_2.h5')
+
+    board = B[64:128].reshape(8,8)
+    board = B[64:128].reshape(8,8)
+    negative_board = 1 - board
+    board = 1 - negative_board
+
+    if B[-3]==0:
+        X = np.concatenate((board, negative_board, np.zeros((8,8))), axis=1)
+    elif B[-3]==1:
+        X = np.concatenate((board, 1 - board, np.ones((8,8))), axis=1)
+
+    X = X.reshape(-1, 8, 8, 3)
+    predicted_output = model.predict(X)
+    best_move = np.argmax(predicted_output,axis=1)[0]
+
+    Play(B, best_move)
+
+
+###########################
+###### IA interface #######
+###########################
+
+
+def playout_IA_vs_IA(ia_0, ia_1):
+
+    # On initialise la grille à chaque début de nouvelle partie
+    B = StartingBoard.copy()
+
+    # Tant qu'il n'y a pas de Game Over
+    while not Terminated(B):
+
+        # Si c'est au tour du joueur 0
+        if B[-3] == 0:
+            # On lance l'ia 0 pour qu'elle joue zon coup
+            ia_0(B) 
+
+        # Si c'est au tour du joueur 1
+        elif B[-3] == 1:
+            # On lance l'ia 1 pour qu'elle joue son coup
+            ia_1(B)
+    
+    return GetScore(B)
+
+
+def launch_n_games(n, ia_0, ia_1):
+    # On déclare un Numpy Array à 0 pour stocker le score
+    scores = np.zeros(n)
+
+    for i in range(n):
+
+        print('Game :', i)
+
+        # On récupère le score final de la partie
+        score = playout_IA_vs_IA(ia_0, ia_1)
+        # On stcoke le résultat dans un Array Numpy dédié
+        scores[i] = score
+
+    return scores
+
+
+nb_games = 200
+
+T0 = time.time()
+scores = launch_n_games(nb_games, monte_carlo_tree_search, IA10KP)
+#scores, data = MCTS_vs_ia(nb_games,find_best_action_deep)
+T1 = time.time()
+print("time:",T1-T0)
+
+percentage_score_player_0 = scores[scores == 1].sum()*100/nb_games
+percentage_score_player_1 = -scores[scores == -1].sum()*100/nb_games
+
+print("Score player 0 :", percentage_score_player_0, '%')
+print("Score player 1 :", percentage_score_player_1, '%\n')
+
+if percentage_score_player_0 > percentage_score_player_1:
+    print('WINNER : Player 0')
+else:
+    print('WINNER : Player 1')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #@overload(np.array)
 def MCTS_vs_ia(n_games,ia_1):
@@ -601,7 +584,7 @@ def MCTS_vs_ia(n_games,ia_1):
         print("game n:",i)
         B = StartingBoard.copy()
 
-        nb_UCT_player = 0
+        nb_UCT_player = 1
 
         if nb_UCT_player == 0:
             while B[-1] != 0:
@@ -613,6 +596,7 @@ def MCTS_vs_ia(n_games,ia_1):
                 elif B[-3] == 1:
                 # On lance l'ia 1 pour qu'elle choisisse son coup
                     id_move = ia_1(B.copy(), player_0=False)
+                    print(id_move)
 
                 # Get game data
                 board = B[64:128].reshape(8,8)
@@ -659,33 +643,3 @@ def MCTS_vs_ia(n_games,ia_1):
             games_scores[i]=GetScore(B)
     
     return games_scores, data
-
-
-
-
-nb_games = 10
-
-T0 = time.time()
-#scores = launch_n_games(nb_games, IA1KP, IARand)
-scores, data = MCTS_vs_ia(nb_games,IARand)
-T1 = time.time()
-print("time:",T1-T0)
-
-#print("Scores :", scores, '\n')
-#scores=scores[100:]
-percentage_score_player_0 = scores[scores == 1].sum()*100/nb_games
-percentage_score_player_1 = -scores[scores == -1].sum()*100/nb_games
-
-print("Score player 0 :", percentage_score_player_0, '%')
-print("Score player 1 :", percentage_score_player_1, '%\n')
-
-if percentage_score_player_0 > percentage_score_player_1:
-    print('WINNER : Player 0')
-else:
-    print('WINNER : Player 1')
-
-
-import pickle
-
-with open('data.pkl', 'wb') as f:
-    pickle.dump(data, f)
